@@ -711,7 +711,7 @@ const firebaseConfig = {
           const teacherClass = document.getElementById('reg-teacher-class').value;
           const schoolId = document.getElementById('reg-school-id').value || 'МТМУ Умумӣ';
           const adminKey = document.getElementById('reg-admin-key').value;
-
+const ADMIN_SECRET_KEY = "SECURITY_ADMIN_2026";
           if (role === 'admin' && adminKey !== ADMIN_SECRET_KEY) {
             alert('❌ Хатогӣ: Калиди махфии Администратор нодуруст аст!');
             return;
