@@ -11,8 +11,8 @@
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getDatabase, ref, set, push, onValue, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    // КОНФИГУРАТСИЯИ FIREBASE (Инҷо калидҳои худро гузоред)
-const firebaseConfig = {
+    // КОНФИГУРАТСИЯИ FIREBASE
+   const firebaseConfig = {
   apiKey: "AIzaSyBzXu7p_6zQwmdH1KpxVTgj6_O3RMzSMcw",
   authDomain: "edaftar-pro-max.firebaseapp.com",
   projectId: "edaftar-pro-max",
@@ -711,7 +711,7 @@ const firebaseConfig = {
           const teacherClass = document.getElementById('reg-teacher-class').value;
           const schoolId = document.getElementById('reg-school-id').value || 'МТМУ Умумӣ';
           const adminKey = document.getElementById('reg-admin-key').value;
-const ADMIN_SECRET_KEY = "SECURITY_ADMIN_2026";
+
           if (role === 'admin' && adminKey !== ADMIN_SECRET_KEY) {
             alert('❌ Хатогӣ: Калиди махфии Администратор нодуруст аст!');
             return;
@@ -720,15 +720,13 @@ const ADMIN_SECRET_KEY = "SECURITY_ADMIN_2026";
           const res = await window.fbCreateUser(window.fbAuth, email, pass);
           await window.fbSendVerify(res.user);
 
-          const uniqueClassKey = `${schoolId}_${teacherClass}`;
-
           await window.fbSet(window.fbRef(window.fbDb, 'users/' + res.user.uid), {
             name: name, 
             email: email, 
             role: role, 
             schoolId: schoolId,
             studentCode: stCode ? `${schoolId}_${stCode}` : null,
-            teacherClass: role === 'teacher' ? uniqueClassKey : null,
+            teacherClass: role === 'teacher' ? teacherClass : null,
             displayClass: teacherClass
           });
 
@@ -781,7 +779,7 @@ const ADMIN_SECRET_KEY = "SECURITY_ADMIN_2026";
       } else if (user.role === 'teacher') {
         document.getElementById('panel-teacher').classList.add('active');
         document.getElementById('tch-class-panel-title').innerText = `➕ Илова кардани Талаба (${user.displayClass || user.teacherClass})`;
-        fetchTeacherStudents(user.teacherClass);
+        fetchTeacherStudents();
       } else if (user.role === 'parent') {
         document.getElementById('panel-parent').classList.add('active');
         fetchParentGrades(user.studentCode);
@@ -794,30 +792,26 @@ const ADMIN_SECRET_KEY = "SECURITY_ADMIN_2026";
       e.preventDefault();
       const name = document.getElementById('tch-add-st-name').value;
       const rawCode = document.getElementById('tch-add-st-code').value;
-      const fullCode = `${activeUser.schoolId}_${rawCode}`;
+      const fullCode = `${activeUser.schoolId}_${activeUser.displayClass}_${rawCode}`;
 
       await window.fbSet(window.fbRef(window.fbDb, 'students/' + fullCode), { 
-        className: activeUser.teacherClass,
+        schoolId: activeUser.schoolId,
         displayClass: activeUser.displayClass,
         name: name, 
         code: fullCode,
         rawCode: rawCode,
-        schoolId: activeUser.schoolId,
         teacherId: activeUser.name
       });
 
-      alert('✅ Хонанда илова шуд!');
+      alert('✅ Хонанда бомуваффақият илова шуд!');
       document.getElementById('tch-add-st-name').value = '';
       document.getElementById('tch-add-st-code').value = '';
-      fetchTeacherStudents(activeUser.teacherClass);
     }
 
     async function deleteStudent(code) {
-      if (confirm(`Оё мехоҳед хонандаро нест кунед?`)) {
+      if (confirm(`Оё мехоҳед ин хонандаро нест кунед?`)) {
         await window.fbRemove(window.fbRef(window.fbDb, 'students/' + code));
-        alert('🗑️ Нест карда шуд.');
-        if (activeUser.role === 'admin') fetchAdminStudents();
-        else fetchTeacherStudents(activeUser.teacherClass);
+        alert('🗑️ Хонанда нест карда шуд.');
       }
     }
 
@@ -839,39 +833,44 @@ const ADMIN_SECRET_KEY = "SECURITY_ADMIN_2026";
       });
     }
 
-    async function fetchTeacherStudents(teacherClass) {
+    function fetchTeacherStudents() {
       const select = document.getElementById('tch-student-select');
       const tbody = document.getElementById('tch-students-table');
-      const snap = await window.fbGet(window.fbRef(window.fbDb, 'students'));
       
-      select.innerHTML = '';
-      tbody.innerHTML = '';
+      window.fbOnValue(window.fbRef(window.fbDb, 'students'), (snap) => {
+        select.innerHTML = '';
+        tbody.innerHTML = '';
 
-      let firstCode = null;
+        let firstCode = null;
+        let count = 0;
 
-      snap.forEach(child => {
-        const s = child.val();
-        if (s.className === teacherClass) {
-          if (!firstCode) firstCode = s.code;
+        snap.forEach(child => {
+          const s = child.val();
+          if (s.schoolId === activeUser.schoolId && s.displayClass === activeUser.displayClass) {
+            count++;
+            if (!firstCode) firstCode = s.code;
 
-          select.innerHTML += `<option value="${s.code}">${s.name} (${s.rawCode || s.code})</option>`;
-          tbody.innerHTML += `
-            <tr>
-              <td><strong>${s.rawCode || s.code}</strong></td>
-              <td>${s.name}</td>
-              <td><button class="btn-delete" onclick="deleteStudent('${s.code}')">Удалить</button></td>
-            </tr>`;
+            select.innerHTML += `<option value="${s.code}">${s.name} (${s.rawCode || s.code})</option>`;
+            tbody.innerHTML += `
+              <tr>
+                <td><strong>${s.rawCode || s.code}</strong></td>
+                <td>${s.name}</td>
+                <td><button class="btn-delete" onclick="deleteStudent('${s.code}')">Удалить</button></td>
+              </tr>`;
+          }
+        });
+
+        if (count > 0 && firstCode) {
+          select.value = firstCode;
+          selectedStudentCodeForTeacherChat = firstCode;
+          onTeacherSelectStudentChange();
+        } else {
+          selectedStudentCodeForTeacherChat = null;
+          select.innerHTML = '<option value="">Хонанда нест</option>';
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-muted);">Дар ин синф ҳоло хонандае сабт нашудааст.</td></tr>';
+          document.getElementById('tch-chat-box').innerHTML = '<div style="color:var(--text-muted); padding:10px;">Барои оғози чат аввал хонанда илова кунед.</div>';
         }
       });
-
-      if (firstCode) {
-        select.value = firstCode;
-        selectedStudentCodeForTeacherChat = firstCode;
-        onTeacherSelectStudentChange();
-      } else {
-        selectedStudentCodeForTeacherChat = null;
-        document.getElementById('tch-chat-box').innerHTML = '<div style="color:var(--text-muted); padding:10px;">Дар ин синф ҳоло хонандае нест.</div>';
-      }
     }
 
     function onTeacherSelectStudentChange() {
