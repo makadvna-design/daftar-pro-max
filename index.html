@@ -12,7 +12,8 @@
     import { getDatabase, ref, set, push, onValue, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
     // КОНФИГУРАТСИЯИ FIREBASE
-    const firebaseConfig = {
+  
+  const firebaseConfig = {
   apiKey: "AIzaSyBzXu7p_6zQwmdH1KpxVTgj6_O3RMzSMcw",
   authDomain: "edaftar-pro-max.firebaseapp.com",
   projectId: "edaftar-pro-max",
@@ -21,7 +22,6 @@
   appId: "1:647994267390:web:ce8431a4cf77c5c3ceb7af",
   measurementId: "G-C4JSV52YEY"
 };
-
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getDatabase(app);
@@ -403,7 +403,7 @@
         </div>
 
         <div class="form-group" id="group-teacher-class" style="display: none;">
-          <label>Синфи роҳбарии шумо:</label>
+          <label>Синфи роҳбарии шумо (ё синфи фарзанд):</label>
           <select id="reg-teacher-class">
             <option value="1 «А» синф">1 «А» синф</option>
             <option value="1 «Б» синф">1 «Б» синф</option>
@@ -458,8 +458,8 @@
         </div>
 
         <div class="form-group" id="group-student-code" style="display: none;">
-          <label>Коди махсуси фарзанд (Student Code):</label>
-          <input type="text" id="reg-student-code" placeholder="Масалан: ST-2026">
+          <label>Коди махсуси фарзанд (Student ID, масалан: ST-2026):</label>
+          <input type="text" id="reg-student-code" placeholder="ST-2026">
         </div>
 
         <button type="submit" class="btn-submit" id="auth-submit-btn">Ворид шудан</button>
@@ -616,7 +616,7 @@
     <div id="panel-parent" class="dashboard-panel">
       <div class="card">
         <div class="card-title">
-          <span>📊 Рӯзномаи Электронӣ</span>
+          <span id="parent-student-title">📊 Рӯзномаи Электронӣ</span>
           <span class="gpa-pill" id="parent-gpa-display">Миёна: 0.0</span>
         </div>
         <table>
@@ -692,7 +692,7 @@
       const isAdmin = role === 'admin' && activeAuthMode === 'reg';
 
       document.getElementById('group-student-code').style.display = isParent ? 'block' : 'none';
-      document.getElementById('group-teacher-class').style.display = isTeacher ? 'block' : 'none';
+      document.getElementById('group-teacher-class').style.display = (isTeacher || isParent) && activeAuthMode === 'reg' ? 'block' : 'none';
       document.getElementById('group-school-id').style.display = (isTeacher || isParent) && activeAuthMode === 'reg' ? 'block' : 'none';
       document.getElementById('group-admin-key').style.display = isAdmin ? 'block' : 'none';
     }
@@ -706,7 +706,7 @@
         if (activeAuthMode === 'reg') {
           const name = document.getElementById('reg-name').value;
           const role = document.getElementById('reg-role').value;
-          const stCode = document.getElementById('reg-student-code').value;
+          const stCode = document.getElementById('reg-student-code').value.trim();
           const teacherClass = document.getElementById('reg-teacher-class').value;
           const schoolId = document.getElementById('reg-school-id').value || 'МТМУ Умумӣ';
           const adminKey = document.getElementById('reg-admin-key').value;
@@ -714,6 +714,16 @@
           if (role === 'admin' && adminKey !== ADMIN_SECRET_KEY) {
             alert('❌ Хатогӣ: Калиди махфии Администратор нодуруст аст!');
             return;
+          }
+
+          let finalStudentCode = null;
+          if (role === 'parent') {
+            if (!stCode) {
+              alert('❌ Лутфан коди фарзандро нависед!');
+              return;
+            }
+            // Формати пурраи коди хонанда дар база
+            finalStudentCode = `${teacherClass}_${stCode}`.replace(/\s+/g, '_');
           }
 
           const res = await window.fbCreateUser(window.fbAuth, email, pass);
@@ -724,7 +734,7 @@
             email: email, 
             role: role, 
             schoolId: schoolId,
-            studentCode: stCode ? `${schoolId}_${stCode}` : null,
+            studentCode: finalStudentCode,
             teacherClass: teacherClass,
             displayClass: teacherClass
           });
@@ -790,7 +800,7 @@
     async function teacherCreateStudent(e) {
       e.preventDefault();
       const name = document.getElementById('tch-add-st-name').value;
-      const rawCode = document.getElementById('tch-add-st-code').value;
+      const rawCode = document.getElementById('tch-add-st-code').value.trim();
       
       const fullCode = `${activeUser.displayClass}_${rawCode}`.replace(/\s+/g, '_');
 
@@ -910,13 +920,51 @@
       return 'g-bad';
     }
 
-    function fetchParentGrades(code) {
-      if (!code) return;
+    async function fetchParentGrades(code) {
       const tbody = document.getElementById('prn-grades-table');
-      window.fbOnValue(window.fbRef(window.fbDb, 'grades/' + code), (snap) => {
+      const titleElem = document.getElementById('parent-student-title');
+      
+      if (!code) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--danger);">❌ Коди фарзанд дар профили шумо нишон дода нашудааст!</td></tr>`;
+        return;
+      }
+
+      // Ҷустуҷӯи номи хонанда аз база
+      let exactStudentCode = code;
+      let studentName = "";
+
+      const studentSnap = await window.fbGet(window.fbRef(window.fbDb, 'students/' + code));
+      if (studentSnap.exists()) {
+        studentName = studentSnap.val().name;
+      } else {
+        // Агар коди пурра мувофиқ наояд, ҳамаи хонандагонро мегардем то пайдо кунем
+        const allStudents = await window.fbGet(window.fbRef(window.fbDb, 'students'));
+        allStudents.forEach(child => {
+          const s = child.val();
+          if (s.rawCode === code || s.code.endsWith(code)) {
+            exactStudentCode = s.code;
+            studentName = s.name;
+          }
+        });
+      }
+
+      if (studentName) {
+        titleElem.innerText = `📊 Рӯзномаи Электронӣ: ${studentName}`;
+      } else {
+        titleElem.innerText = `📊 Рӯзномаи Электронӣ (Фарзанд ёфт нашуд)`;
+      }
+
+      // Хондани баҳоҳо дар замони воқеӣ
+      window.fbOnValue(window.fbRef(window.fbDb, 'grades/' + exactStudentCode), (snap) => {
         tbody.innerHTML = '';
         let sum = 0;
         let count = 0;
+
+        if (!snap.exists()) {
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Ҳоло барои ин хонанда баҳое гузошта нашудааст.</td></tr>`;
+          document.getElementById('parent-gpa-display').innerText = `Миёна: 0.0`;
+          return;
+        }
 
         snap.forEach(child => {
           const g = child.val();
