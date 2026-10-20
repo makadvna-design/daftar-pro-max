@@ -12,7 +12,7 @@
     import { getDatabase, ref, set, push, onValue, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
     // КОНФИГУРАТСИЯИ FIREBASE
-   const firebaseConfig = {
+    const firebaseConfig = {
   apiKey: "AIzaSyBzXu7p_6zQwmdH1KpxVTgj6_O3RMzSMcw",
   authDomain: "edaftar-pro-max.firebaseapp.com",
   projectId: "edaftar-pro-max",
@@ -21,7 +21,6 @@
   appId: "1:647994267390:web:ce8431a4cf77c5c3ceb7af",
   measurementId: "G-C4JSV52YEY"
 };
-
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
@@ -726,7 +725,7 @@
             role: role, 
             schoolId: schoolId,
             studentCode: stCode ? `${schoolId}_${stCode}` : null,
-            teacherClass: role === 'teacher' ? teacherClass : null,
+            teacherClass: teacherClass,
             displayClass: teacherClass
           });
 
@@ -792,10 +791,11 @@
       e.preventDefault();
       const name = document.getElementById('tch-add-st-name').value;
       const rawCode = document.getElementById('tch-add-st-code').value;
-      const fullCode = `${activeUser.schoolId}_${activeUser.displayClass}_${rawCode}`;
+      
+      const fullCode = `${activeUser.displayClass}_${rawCode}`.replace(/\s+/g, '_');
 
       await window.fbSet(window.fbRef(window.fbDb, 'students/' + fullCode), { 
-        schoolId: activeUser.schoolId,
+        schoolId: activeUser.schoolId || 'Мактаб',
         displayClass: activeUser.displayClass,
         name: name, 
         code: fullCode,
@@ -846,7 +846,7 @@
 
         snap.forEach(child => {
           const s = child.val();
-          if (s.schoolId === activeUser.schoolId && s.displayClass === activeUser.displayClass) {
+          if (s.displayClass === activeUser.displayClass) {
             count++;
             if (!firstCode) firstCode = s.code;
 
