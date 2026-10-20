@@ -11,8 +11,8 @@
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getDatabase, ref, set, push, onValue, get, child, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    // КОНФИГУРАТСИЯИ FIREBASE (Калидҳои лоиҳаи худро инҷо ворид кунед)
-   const firebaseConfig = {
+    // КОНФИГУРАТСИЯИ FIREBASE (Инҷо калидҳои худро гузоред)
+const firebaseConfig = {
   apiKey: "AIzaSyBzXu7p_6zQwmdH1KpxVTgj6_O3RMzSMcw",
   authDomain: "edaftar-pro-max.firebaseapp.com",
   projectId: "edaftar-pro-max",
@@ -22,20 +22,26 @@
   measurementId: "G-C4JSV52YEY"
 };
 
+
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getDatabase(app);
 
+    // Барои дастрасии глобалӣ дар код
     window.fbAuth = auth;
     window.fbDb = db;
-    window.fbMethods = {
-      createUserWithEmailAndPassword,
-      signInWithEmailAndPassword,
-      onAuthStateChanged,
-      signOut,
-      sendEmailVerification,
-      ref, set, push, onValue, get, child, remove
-    };
+    window.fbCreateUser = createUserWithEmailAndPassword;
+    window.fbSignIn = signInWithEmailAndPassword;
+    window.fbAuthState = onAuthStateChanged;
+    window.fbSignOut = signOut;
+    window.fbSendVerify = sendEmailVerification;
+    window.fbRef = ref;
+    window.fbSet = set;
+    window.fbPush = push;
+    window.fbOnValue = onValue;
+    window.fbGet = get;
+    window.fbChild = child;
+    window.fbRemove = remove;
   </script>
 
   <style>
@@ -393,7 +399,7 @@
 
         <div class="form-group" id="group-school-id" style="display: none;">
           <label>Интихоб ё ворид кардани номи мактаб:</label>
-          <input type="text" id="reg-school-id" list="taj-schools-database" required placeholder="МТМУ №... ё номи мактаб">
+          <input type="text" id="reg-school-id" list="taj-schools-database" placeholder="МТМУ №... ё номи мактаб">
           <datalist id="taj-schools-database"></datalist>
         </div>
 
@@ -668,7 +674,6 @@
     let activeAuthMode = 'login';
     let activeUser = null;
     let selectedStudentCodeForTeacherChat = null;
-    let activeChatListenerUnsubscribe = null;
     const ADMIN_SECRET_KEY = "SECURITY_ADMIN_2026";
 
     function switchAuthTab(mode) {
@@ -712,12 +717,12 @@
             return;
           }
 
-          const res = await window.fbMethods.createUserWithEmailAndPassword(window.fbAuth, email, pass);
-          await window.fbMethods.sendEmailVerification(res.user);
+          const res = await window.fbCreateUser(window.fbAuth, email, pass);
+          await window.fbSendVerify(res.user);
 
           const uniqueClassKey = `${schoolId}_${teacherClass}`;
 
-          await window.fbMethods.set(window.fbMethods.ref(window.fbDb, 'users/' + res.user.uid), {
+          await window.fbSet(window.fbRef(window.fbDb, 'users/' + res.user.uid), {
             name: name, 
             email: email, 
             role: role, 
@@ -730,10 +735,10 @@
           alert('📧 Линки тасдиқ фиристода шуд! Лутфан ба Email-и худ ворид шуда, онро тасдиқ кунед.');
           switchAuthTab('login');
         } else {
-          const res = await window.fbMethods.signInWithEmailAndPassword(window.fbAuth, email, pass);
+          const res = await window.fbSignIn(window.fbAuth, email, pass);
           if (!res.user.emailVerified) {
-            alert('❌ Почтаи шумо тасдиқ нашудааст! Лутфан линки тасдиқро пахш кунед.');
-            await window.fbMethods.signOut(window.fbAuth);
+            alert('❌ Почтаи шумо тасдиқ нашудааст! Лутфан почтаи худро тасдиқ кунед.');
+            await window.fbSignOut(window.fbAuth);
             return;
           }
         }
@@ -746,12 +751,12 @@
       const timer = setInterval(() => {
         if (window.fbAuth) {
           clearInterval(timer);
-          window.fbMethods.onAuthStateChanged(window.fbAuth, async (user) => {
+          window.fbAuthState(window.fbAuth, async (user) => {
             if (user && user.emailVerified) {
               document.getElementById('auth-section').style.display = 'none';
               document.getElementById('user-bar').style.display = 'flex';
 
-              const snap = await window.fbMethods.get(window.fbMethods.child(window.fbMethods.ref(window.fbDb), `users/${user.uid}`));
+              const snap = await window.fbGet(window.fbChild(window.fbRef(window.fbDb), `users/${user.uid}`));
               if (snap.exists()) {
                 activeUser = snap.val();
                 document.getElementById('user-display-name').innerText = `${activeUser.name} (${activeUser.schoolId || ''})`;
@@ -791,7 +796,7 @@
       const rawCode = document.getElementById('tch-add-st-code').value;
       const fullCode = `${activeUser.schoolId}_${rawCode}`;
 
-      await window.fbMethods.set(window.fbMethods.ref(window.fbDb, 'students/' + fullCode), { 
+      await window.fbSet(window.fbRef(window.fbDb, 'students/' + fullCode), { 
         className: activeUser.teacherClass,
         displayClass: activeUser.displayClass,
         name: name, 
@@ -809,7 +814,7 @@
 
     async function deleteStudent(code) {
       if (confirm(`Оё мехоҳед хонандаро нест кунед?`)) {
-        await window.fbMethods.remove(window.fbMethods.ref(window.fbDb, 'students/' + code));
+        await window.fbRemove(window.fbRef(window.fbDb, 'students/' + code));
         alert('🗑️ Нест карда шуд.');
         if (activeUser.role === 'admin') fetchAdminStudents();
         else fetchTeacherStudents(activeUser.teacherClass);
@@ -818,7 +823,7 @@
 
     function fetchAdminStudents() {
       const tbody = document.getElementById('adm-students-table');
-      window.fbMethods.onValue(window.fbMethods.ref(window.fbDb, 'students'), (snap) => {
+      window.fbOnValue(window.fbRef(window.fbDb, 'students'), (snap) => {
         tbody.innerHTML = '';
         snap.forEach(child => {
           const s = child.val();
@@ -837,7 +842,7 @@
     async function fetchTeacherStudents(teacherClass) {
       const select = document.getElementById('tch-student-select');
       const tbody = document.getElementById('tch-students-table');
-      const snap = await window.fbMethods.get(window.fbMethods.ref(window.fbDb, 'students'));
+      const snap = await window.fbGet(window.fbRef(window.fbDb, 'students'));
       
       select.innerHTML = '';
       tbody.innerHTML = '';
@@ -890,10 +895,10 @@
       const status = document.getElementById('tch-status').value;
       const comment = document.getElementById('tch-comment').value;
 
-      const newRef = window.fbMethods.push(window.fbMethods.ref(window.fbDb, 'grades/' + code));
+      const newRef = window.fbPush(window.fbRef(window.fbDb, 'grades/' + code));
       const today = new Date().toLocaleDateString('tg-TJ');
 
-      await window.fbMethods.set(newRef, { date: today, subject: sub, grade: grade, status: status, comment: comment || '—' });
+      await window.fbSet(newRef, { date: today, subject: sub, grade: grade, status: status, comment: comment || '—' });
       alert('✅ Баҳо сабт шуд!');
       document.getElementById('tch-comment').value = '';
     }
@@ -909,7 +914,7 @@
     function fetchParentGrades(code) {
       if (!code) return;
       const tbody = document.getElementById('prn-grades-table');
-      window.fbMethods.onValue(window.fbMethods.ref(window.fbDb, 'grades/' + code), (snap) => {
+      window.fbOnValue(window.fbRef(window.fbDb, 'grades/' + code), (snap) => {
         tbody.innerHTML = '';
         let sum = 0;
         let count = 0;
@@ -941,8 +946,8 @@
     async function postSchoolAnnouncement(e) {
       e.preventDefault();
       const text = document.getElementById('adm-announcement-text').value;
-      const ref = window.fbMethods.push(window.fbMethods.ref(window.fbDb, 'announcements'));
-      await window.fbMethods.set(ref, {
+      const ref = window.fbPush(window.fbRef(window.fbDb, 'announcements'));
+      await window.fbSet(ref, {
         author: activeUser.name,
         text: text,
         date: new Date().toLocaleDateString('tg-TJ')
@@ -953,7 +958,7 @@
 
     function fetchAnnouncements() {
       const box = document.getElementById('announcements-box');
-      window.fbMethods.onValue(window.fbMethods.ref(window.fbDb, 'announcements'), (snap) => {
+      window.fbOnValue(window.fbRef(window.fbDb, 'announcements'), (snap) => {
         box.innerHTML = '';
         snap.forEach(child => {
           const a = child.val();
@@ -979,8 +984,8 @@
         return;
       }
 
-      const chatRef = window.fbMethods.push(window.fbMethods.ref(window.fbDb, 'private_chats/' + targetStudentCode));
-      await window.fbMethods.set(chatRef, {
+      const chatRef = window.fbPush(window.fbRef(window.fbDb, 'private_chats/' + targetStudentCode));
+      await window.fbSet(chatRef, {
         sender: activeUser.name,
         role: activeUser.role,
         text: text,
@@ -993,7 +998,7 @@
     function listenPrivateChat(studentCode, boxId) {
       if (!studentCode) return;
       const box = document.getElementById(boxId);
-      window.fbMethods.onValue(window.fbMethods.ref(window.fbDb, 'private_chats/' + studentCode), (snap) => {
+      window.fbOnValue(window.fbRef(window.fbDb, 'private_chats/' + studentCode), (snap) => {
         box.innerHTML = '';
         snap.forEach(child => {
           const msg = child.val();
@@ -1010,7 +1015,7 @@
     }
 
     function signOutUser() {
-      window.fbMethods.signOut(window.fbAuth);
+      window.fbSignOut(window.fbAuth);
     }
   </script>
 </body>
